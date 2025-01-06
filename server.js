@@ -1,8 +1,8 @@
 const express = require("express");
 const cors = require("cors");
 const cartRoute = require("./src/routes/cart");
-const productRoute = require("./src/routes/product");
-const productDetailRoute = require("./src/routes/productdetail");
+const productRoute = require("./src/routes//product");
+const productDetailRoute = require("./src/routes//productdetail");
 const app = express();
 
 const port = process.env.PORT || 3001;

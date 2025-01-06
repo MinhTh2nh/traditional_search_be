@@ -29,3 +29,7 @@ productSchema.index({ name: "text", description: "text" });
 
 // Create the model
 module.exports = mongoose.model('Product', productSchema);
+
+
+
+

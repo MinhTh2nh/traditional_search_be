@@ -143,7 +143,6 @@ exports.updateOne = async (req, res) => {
   }
 };
 
-
 exports.getuser = async (req, res) => {
   const id = req.params.id;
   try {

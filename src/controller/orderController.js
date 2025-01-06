@@ -1,18 +1,12 @@
 const db = require('../db');
 const Order = require("../models/Order");
 
-exports.getAllOrders = (req, res) => {
-  db.query('SELECT * FROM `order`', (err, results) => {
-    if (err) {
-      console.error('Error retrieving orders:', err);
-      return res.status(500).json({ message: 'Error retrieving orders.' });
-    }
-    if (results.length > 0) {
-      return res.status(200).json(results);
-    } else {
-      return res.status(404).json({ message: 'No orders found.' });
-    }
-  });
+exports.getAllOrders =  async (req, res) => {
+  const result = await Order.find();
+  if (result.length === 0) {
+    return res.status(404).json({ message: "No item found in product list" });
+  }
+  return res.status(200).json(result);
 };
 
 exports.getOrderByID = (req, res) => {
@@ -32,26 +26,33 @@ exports.getOrderByID = (req, res) => {
   });
 };
 
-exports.updateOrderByID = (req, res) => {
-  const orderID = req.params.orderID; // Get the order ID from request parameters
-  const { firstname, lastname, phone, address, email } = req.body; // Include all fields you want to update
-  // Assume validation and sanitization have been done
-  const query = 'UPDATE `order` SET firstname = ?, lastname = ?, phone = ?, address = ?, email = ? WHERE orderID = ?';
-  const values = [firstname, lastname, phone, address, email, orderID];
-
-  db.query(query, values, (err, result) => {
-    if (err) {
-      console.error('Error updating order details:', err);
-      return res.status(500).json({ message: 'Error updating order details.' });
+exports.updateOrderByID = async (req, res) => {
+  try {
+    const orderID = req.params.orderID; 
+    const order = await Order.findById(orderID);
+    if (!order) {
+      return res.status(404).json({ message: "Order not found." });
     }
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: 'Order not found.' });
+    const updatedFields = req.body;
+    for (let key in updatedFields) {
+      if (updatedFields.hasOwnProperty(key) && updatedFields[key]) {
+        order[key] = updatedFields[key];
+      }
     }
-
-    // Return a message that the order was updated successfully
-    return res.status(200).json({ message: 'Order updated successfully.' });
-  });
+    await order.save();
+    return res.status(200).json({
+      message: "Order updated successfully.",
+      order: order,
+    });
+  } catch (error) {
+    console.error("Error updating order", error);
+    return res.status(500).json({
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
 };
+
 
 exports.DeleteOrderByID = (req, res) => {
   const { orderID } = req.params; // Get the order ID from request parameters

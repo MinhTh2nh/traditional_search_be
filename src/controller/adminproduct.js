@@ -1,58 +1,59 @@
 const db = require("../config/dbconnect");
+const Product = require("../models/product");
 
 exports.getAll = async (req, res) => {
   try {
-    const result = await db.queryAsync("SELECT * FROM products");
-
+    const result = await Product.find()
+      .select("-reviews")
+      .sort({ timestamp: -1 });
     if (result.length === 0) {
-      return res.status(404).json({ message: "No item found in product." });
+      return res.status(404).json({ message: "No item found in product list" });
     }
 
     const items = result.map((row) => ({
-      id: row.id,
-      product_name: row.product_name,
-      product_type: row.product_type,
+      id: row._id,
+      product_name: row.name,
+      product_type: row.category,
       price: row.price,
-      quantity: row.quantity,
-      size: row.size,
       color: row.color,
-      material: row.material,
-      picture_one: row.picture_one,
-      picture_two: row.picture_two,
-      picture_three: row.picture_three,
+      size: "XL",
+      material: row.description,
+      picture_one: row.image_url,
+      picture_two: row.image_url,
+      picture_three: row.image_url,
+      total_stock: row.total_stock,
     }));
 
     return res.status(200).json({ items });
   } catch (error) {
-    console.error("Error retrieving product: ", error);
+    console.error("Error retrieving items from the product list: ", error);
     return res
       .status(500)
-      .json({ message: "Internal server error", error: error.message });
+      .json({ message: "Internal server error.", error: error.message });
   }
 };
 
 exports.getOne = async (req, res) => {
   try {
     const itemId = req.params.id;
+    const result = await Product.findById(itemId)
 
-    const result = await db.queryAsync("Select * from products where id = ?", [
-      itemId,
-    ]);
     if (result.length === 0) {
       return res.status(404).json({ message: "No item found in product list" });
     }
+
     const item = {
-      id: result[0].id,
-      product_name: result[0].product_name,
-      product_type: result[0].product_type,
-      price: result[0].price,
-      quantity: result[0].quantity,
-      size: result[0].size,
-      color: result[0].color,
-      material: result[0].material,
-      picture_one: result[0].picture_one,
-      picture_two: result[0].picture_two,
-      picture_three: result[0].picture_three,
+      id: result._id,
+      product_name: result.name,
+      product_type: result.category,
+      price: result.price,
+      quantity: result.total_stock,
+      size: result.size,
+      color: result.color,
+      material: result.description,
+      picture_one: result.image_url,
+      picture_two: result.image_url,
+      picture_three: result.image_url,
     };
     return res.status(200).json({ item });
   } catch (error) {
@@ -70,56 +71,44 @@ exports.addProduct = async (req, res) => {
       product_name,
       product_type,
       price,
-      quantity,
+      total_stock,
       size,
       color,
-      material,
-      picture_one,
-      picture_two,
-      picture_three,
+      description,
+      image_url,
     } = req.body;
     if (
-      !picture_one ||
-      !picture_two ||
-      !picture_three ||
+      !image_url ||
       !product_name ||
       !product_type ||
       !price ||
-      !quantity ||
+      !total_stock ||
       !size ||
       !color ||
-      !material
+      !description
     ) {
-      return res
-        .status(400)
-        .json({ message: "There are some missing fields here." });
+      return res.status(400).json({ message: "There are some missing fields here." });
     }
+    const product_id = Math.floor(Math.random() * 1000000) + 1; // Generate a random product ID
 
-    const result = await db.queryAsync(
-      "INSERT INTO products (product_name, product_type, price, quantity, size, color,material,picture_one,picture_two,picture_three) VALUES (?, ?, ?, ?, ?, ?,?,?,?,?)",
-      [
-        product_name,
-        product_type,
-        price,
-        quantity,
-        size,
-        color,
-        material,
-        picture_one,
-        picture_two,
-        picture_three,
-      ]
-    );
-
-    if (result.affectedRows === 1) {
-      return res.status(201).json({ message: "Product added to product list" });
-    } else {
-      return res
-        .status(500)
-        .json({ message: "Failed to add product to product list" });
-    }
+    const newProduct = await Product.create({
+      product_id,               // Assign the generated product ID
+      product_code: product_id, // Use the same value for product_code
+      name: product_name,       // Map product_name to name
+      category: product_type,   // Map product_type to category
+      price,
+      total_stock,
+      size,
+      color,
+      description,
+      image_url,
+    });
+    return res.status(201).json({
+      message: "Product added successfully.",
+      product: newProduct,
+    });
   } catch (error) {
-    console.error("Error adding product to the product list", error);
+    console.error("Error adding product to the product list:", error);
     return res.status(500).json({
       message: "Internal server error.",
       error: error.message,
@@ -127,30 +116,29 @@ exports.addProduct = async (req, res) => {
   }
 };
 
+
+
+
+
 exports.deleteProduct = async (req, res) => {
   try {
     const id = req.params.id;
-
-    const result = await db.queryAsync("DELETE FROM products WHERE id = ?", [
-      id,
-    ]);
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({
-        message: "Product not found in the product list",
-      });
+    const deletedProduct = await Product.findByIdAndDelete(id);
+    if (!deletedProduct) {
+      return res.status(404).json({ message: "Product not found." });
     }
-    res.status(200).json({
-      message: "Product deleted from the product list successfully",
-    });
+    return res.status(200).json({ message: "Product deleted successfully." });
   } catch (error) {
-    console.error("Error deleting product in the product list", error);
+    console.error("Error deleting product:", error);
     return res.status(500).json({
-      message: "Internal server error",
+      message: "Error deleting product.",
       error: error.message,
     });
   }
 };
+
+
+
 
 exports.updateProduct = async (req, res) => {
   try {
@@ -159,15 +147,17 @@ exports.updateProduct = async (req, res) => {
       product_type,
       price,
       quantity,
-      size,
       color,
       material,
       picture_one,
       picture_two,
       picture_three,
-    } = req.body; // Fix variable names here
+    } = req.body;
     const id = req.params.id;
-
+    console.log(product_name, product_type, price, quantity, color, material, picture_one, picture_two, picture_three);
+    if (!id) {
+      return res.status(400).json({ message: "Bad Request. Missing product ID." });
+    }
     if (
       !picture_one ||
       !picture_two ||
@@ -176,57 +166,35 @@ exports.updateProduct = async (req, res) => {
       !product_type ||
       !price ||
       !quantity ||
-      !size ||
       !color ||
       !material
     ) {
-      return res
-        .status(400)
-        .json({ message: "Bad Request. Please provide all required fields." }); // Change status code to 400 for a bad request
+      return res.status(400).json({
+        message: "Bad Request. Please provide all required fields.",
+      });
     }
-
-    const result = await db.queryAsync(
-      "UPDATE products SET product_name = ?, product_type = ?, price = ?, quantity = ?, size = ?, color = ? , material = ?, picture_one = ?, picture_two = ?, picture_three = ? WHERE id = ?",
-      [
-        product_name,
-        product_type,
+    const updatedProduct = await Product.findByIdAndUpdate(
+      id,
+      {
+        name: product_name,
+        category: product_type,
         price,
-        quantity,
-        size,
+        total_stock: quantity,
         color,
-        material,
-        picture_one,
-        picture_two,
-        picture_three,
-        id,
-      ]
+        description: material,
+        image_url: picture_one,
+      },
+      { new: true }
     );
-
-    if (result.affectedRows === 1) {
-      const updatedItem = {
-        product_name: product_name,
-        product_type: product_type,
-        price: price,
-        quantity: quantity,
-        size: size,
-        color: color,
-        material: material,
-        picture_one: picture_one,
-        picture_two: picture_two,
-        picture_three: picture_three,
-      };
-
-      return res.status(200).json({
-        item: updatedItem,
-        message: "Product is updated in product lists.",
-      });
-    } else {
-      return res.status(404).json({
-        message: "Product not found in the product lists.",
-      });
+    if (!updatedProduct) {
+      return res.status(404).json({ message: "Product not found" });
     }
+    return res.status(200).json({
+      message: "Product updated successfully.",
+      product: updatedProduct,
+    });
   } catch (error) {
-    console.log("Error updating product", error);
+    console.log("Error updating product:", error);
     return res.status(500).json({
       message: "Internal server error",
       error: error.message,

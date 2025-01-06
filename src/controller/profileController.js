@@ -49,18 +49,12 @@ exports.editProfile = async (req, res) => {
 };
 
 // New function to list all users
-exports.ListAllProfile = (req, res) => {
-  db.query('SELECT id,firstname, lastname, phone,address,email FROM accounts', (err, results) => {
-    if (err) {
-      console.error('Error retrieving user list:', err);
-      return res.status(500).json({ message: 'Error retrieving user list.' });
-    }
-    if (results.length > 0) {
-      return res.status(200).json(results);
-    } else {
-      return res.status(404).json({ message: 'No users found.' });
-    }
-  });
+exports.ListAllProfile = async (req, res) => {
+  const result = await User.find();
+  if (!result) {
+    return res.status(404).json({ message: "User not found." });
+  }
+  return res.status(200).json(result);
 };
 
 exports.ViewProfileByID = (req, res) => {
@@ -80,73 +74,82 @@ exports.ViewProfileByID = (req, res) => {
   });
 };
 
-exports.AddNewUser = (req, res) => {
-  // Extract the user details from the request body
-  const { id, firstname, lastname, phone, address, email, password } = req.body;
-  console.log(req.body);
-  // Hash the password before saving it to the database
-  bcrypt.hash(password, saltRounds, (err, hashedPassword) => {
-    if (err) {
-      console.error('Error hashing the password:', err);
-      return res.status(500).json({ message: 'Error registering the user.' });
+exports.AddNewUser = async (req, res) => {
+  try {
+    const { firstname, lastname, phone, address, email, password } = req.body;
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: 'User with this email already exists.' });
     }
-
-    // Construct the SQL query to insert a new user
-    const query = 'INSERT INTO accounts (id ,firstname,lastname, phone,address,email,password) VALUES (?,?, ?, ?, ?,?,?)';
-    const values = [id, firstname, lastname, phone, address, email, hashedPassword];
-
-    // Execute the query
-    db.query(query, values, (err, result) => {
+    bcrypt.hash(password, saltRounds, async (err, hashedPassword) => {
       if (err) {
-        console.error('Error adding new user:', err);
-        return res.status(500).json({ message: 'Error adding new user.' });
+        console.error('Error hashing the password:', err);
+        return res.status(500).json({ message: 'Error registering the user.' });
       }
-
-      // If the user was successfully added, send back a success message
-      // You might also want to send back the ID of the new user, but be careful not to expose sensitive information
-      return res.status(201).json({ message: 'New user added successfully.' });
+      const newUser = new User({
+        name: `${firstname} ${lastname}`, 
+        phone,
+        address,
+        email,
+        password: hashedPassword, 
+      });
+      await newUser.save();
+      return res.status(201).json({
+        message: 'User registered successfully.',
+        user: {
+          id: newUser._id,
+          name: newUser.name,
+          email: newUser.email,
+          phone: newUser.phone,
+          address: newUser.address,
+        },
+      });
     });
-  });
+  } catch (error) {
+    console.error('Error registering the user:', error);
+    return res.status(500).json({ message: 'Error registering the user.' });
+  }
 };
 
-exports.updateProfileById = (req, res) => {
-  const id = req.params.id; // Get the user ID from request parameters
-  const { firstname, lastname, phone, address, email } = req.body; // Include all fields you want to update
 
-  // Assume validation and sanitization have been done
-  const query = 'UPDATE accounts SET firstname = ?, lastname = ?, phone = ?, address = ?, email = ? WHERE id = ?';
-  const values = [firstname, lastname, phone, address, email, id];
-
-  db.query(query, values, (err, result) => {
-    if (err) {
-      console.error('Error updating profile information:', err);
-      return res.status(500).json({ message: 'Error updating profile information.' });
-    }
-    if (result.affectedRows === 0) {
+exports.updateProfileById = async (req, res) => {
+  const { id } = req.params; // Get the user ID from request parameters
+  const { firstname, phone, address, email } = req.body; // Include all fields to be updated
+  console.log(firstname);
+  try {
+    const updatedUser = await User.findByIdAndUpdate(
+      id,
+      { name: firstname, phone, address, email },
+      { new: true, runValidators: true }
+    );
+    if (!updatedUser) {
       return res.status(404).json({ message: 'User not found.' });
     }
-
-    // Return a message that the profile was updated successfully
-    return res.status(200).json({ message: 'Profile updated successfully.' });
-  });
+    return res.status(200).json({
+      message: 'Profile updated successfully.',
+      user: updatedUser,
+    });
+  } catch (err) {
+    console.error('Error updating profile information:', err);
+    return res.status(500).json({ message: 'Error updating profile information.' });
+  }
 };
 
 
 //Delete a user by username
-exports.DeleteProfileByID = (req, res) => {
-  const { id } = req.params; // assuming you pass the product name as a URL parameter
-
-  db.query('DELETE FROM accounts WHERE id = ?', [id], (err, result) => {
-    if (err) {
-      console.error('Error deleting user:', err);
-      return res.status(500).json({ message: 'Error deleting user.' });
-    }
-    if (result.affectedRows === 0) {
-      // If no rows are affected, it means the user was not found
+exports.DeleteProfileByID = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const user = await User.findById(id);
+    if (!user) {
       return res.status(404).json({ message: 'User not found.' });
     }
-
-    // If the user was successfully deleted, send back a success message
+    await User.findByIdAndDelete(id);
     return res.status(200).json({ message: 'User deleted successfully.' });
-  });
+  } catch (err) {
+    console.error('Error deleting user:', err);
+    return res.status(500).json({ message: 'Error deleting user.' });
+  }
 };
+
