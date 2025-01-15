@@ -1,5 +1,7 @@
 const db = require("../config/dbconnect");
 const Product = require("../models/product");
+const fs = require("fs");
+const { parse } = require("json2csv");
 
 exports.getAll = async (req, res) => {
   try {
@@ -238,5 +240,69 @@ exports.addColor = async (req, res) => {
       message: "Internal server error",
       error: error.message,
     });
+  }
+};
+
+exports.exportProduct = async (req, res) => {
+  try {
+    // Fetch products from the database
+    const result = await Product.find().sort({ timestamp: -1 });
+    if (result.length === 0) {
+      return res.status(404).json({ message: "No item found in product list" });
+    }
+
+    // Map products to match the desired CSV structure
+    const items = result.map((row) => ({
+      name: row.name,
+      price: row.price,
+      category: row.category,
+      product_code: row.product_code,
+      color: row.color,
+      product_id: row.product_id,
+      description: row.description,
+      index_name: row.index_name || "",
+      total_stock: row.total_stock,
+      sold_count: row.sold_count,
+      review_count: row.review_count,
+      rating_count: row.rating_count,
+      avg_rating: row.avg_rating,
+      image_url: row.image_url,
+    }));
+
+    // Convert the data to CSV format
+    const csv = parse(items, {
+      fields: [
+        "name",
+        "price",
+        "category",
+        "product_code",
+        "color",
+        "product_id",
+        "description",
+        "index_name",
+        "total_stock",
+        "sold_count",
+        "review_count",
+        "rating_count",
+        "avg_rating",
+        "image_url",
+      ],
+    });
+
+    // Define file name and path
+    const filePath = "./exported_products.csv";
+
+    // Write CSV data to file
+    fs.writeFileSync(filePath, csv);
+
+    // Respond with the file for download
+    res.setHeader("Content-Disposition", `attachment; filename=products.csv`);
+    res.setHeader("Content-Type", "text/csv");
+    return res.status(200).send(csv);
+  } catch (error) {
+    console.error("Error exporting product data: ", error);
+    return res
+      .status(500)
+      .json({ message: "Internal server error.", error: error.message });
   }
 };
